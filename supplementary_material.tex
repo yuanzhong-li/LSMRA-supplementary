@@ -1,0 +1,258 @@
+\documentclass[lettersize,journal]{IEEEtran}
+\usepackage{amsmath,amsfonts,amssymb}
+\usepackage{array}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{etoolbox}
+\usepackage{ragged2e}
+\usepackage[skins]{tcolorbox}
+
+\captionsetup[table]{%
+    textfont={sc},
+    labelsep=newline,
+    justification=centering
+}
+
+\newcommand{\algphase}[1]{\STATE \textbf{#1}}
+\newcommand{\alghl}[1]{\texttt{#1}}
+\newcommand{\algio}[2]{%
+  \par\noindent
+  \begin{tabular}{@{}l@{\hspace{0.4em}}>{%
+    \RaggedRight\arraybackslash\hyphenpenalty=8000\exhyphenpenalty=8000%
+  }p{\dimexpr\linewidth-1.35cm\relax}@{}}
+  \textbf{Input:} & #1 \\[1.5pt]
+  \textbf{Output:} & #2
+  \end{tabular}%
+  \par
+}
+\makeatletter
+\patchcmd{\ALC@item}{\hbox to\labelwidth {\unhbox\@tempboxa}}{\hbox to\labelwidth {\hss\unhbox\@tempboxa}}{}{}
+\makeatother
+\AtBeginEnvironment{algorithmic}{%
+  \RaggedRight\footnotesize
+  \hyphenpenalty=10000\exhyphenpenalty=10000
+  \setlength{\itemsep}{0.12em}%
+}
+\newcommand{\alghead}[1]{%
+  \par\subsection{#1}\nopagebreak
+}
+\newcounter{algnum}
+\newenvironment{algbox}[1]{%
+  \par\nobreak\vspace{1pt}%
+  \noindent\begin{minipage}{\linewidth}%
+  \refstepcounter{algnum}%
+  \noindent\hrule height 0.7pt\relax\par\nobreak\vspace{1.5pt}%
+  \noindent\textbf{Algorithm~\thealgnum}~~#1\par\nobreak\vspace{0.5pt}%
+  \noindent\hrule\relax\par\nobreak\vspace{1.5pt}%
+  \begingroup\footnotesize\RaggedRight
+  \hyphenpenalty=10000\exhyphenpenalty=10000
+  \setlength{\parindent}{0pt}\setlength{\parskip}{0pt}\ignorespaces
+}{%
+  \par\endgroup
+  \nobreak\vspace{1.5pt}%
+  \noindent\hrule height 0.7pt\relax
+  \end{minipage}%
+  \par\vspace{8pt}%
+}
+\newtcolorbox{promptbox}[1]{%
+  enhanced,
+  colback=black!3!white, colframe=black!65,
+  colbacktitle=black!72, coltitle=white,
+  fonttitle=\bfseries\footnotesize, fontupper=\footnotesize,
+  title={#1}, boxrule=0.55pt, arc=1pt,
+  left=5pt, right=5pt, top=3pt, bottom=3pt,
+  before skip=2pt, after skip=6pt
+}
+
+\begin{document}
+
+\title{Supplementary Material for\\
+LSMRA: LLM-Enhanced Semantic Multi-Agent Risk Analysis Framework for Interbank Credit Rating}
+\author{Yuanzhong Li, Yuxi Yan, Kun Zhu, Nana Zhang, Zhiquan Liu, and Changjun Jiang}
+\markboth{IEEE Transactions on Information Forensics and Security,~Vol.~XX, No.~X, Month~20XX}%
+{Li \MakeLowercase{\textit{et al.}}: Supplementary Material for LSMRA}
+\maketitle
+\raggedbottom
+
+\begin{abstract}
+This supplementary material provides the detailed algorithms and the semantic embedding prompt used by LSMRA.
+Notation follows the main paper.
+\end{abstract}
+
+\section{Algorithms}
+
+\alghead{End-to-End Pipeline}
+\begin{algbox}{End-to-End LSMRA Pipeline\label{alg:lsmra-e2e}}
+\algio{%
+target quarter $t$; detection window $T_{\mathrm{win}}=3$; attack rate $\rho\in[0,0.25]$; semantic/risk enable flags $s_{\mathrm{sem}},s_{\mathrm{risk}}\in\{0,1\}$%
+}{%
+rating predictions $\hat{Y}$; refined anomaly set $S_2$; semantic inconsistency scores $\Omega$; risk scores $\psi$%
+}
+\nopagebreak
+\begin{algorithmic}[1]
+\STATE Load features $\{X^{(\tau)}\}$, adjacencies $\{A^{(\tau)}\}$, and ratings $\{y_i^{(\tau)}\}$ for $\tau\in\{t{-}2,t{-}1,t\}$; if $\rho>0$, load the attacked snapshots $(\tilde{X}^{(\tau)},\tilde{A}^{(\tau)})$;
+\algphase{Phase 1: Multi-Agent Suspicious Screening}
+\STATE Obtain $S_1$, $\{s(i)\}$, and $\{c_k(i)\}$ by Algorithm~\ref{alg:m1}$(\{X^{(\tau)}\},\{A^{(\tau)}\},\{F_g\},\{y_i^{(\tau)}\})$;
+\algphase{Phase 2: LLM-Enhanced Semantic Verification}
+\IF{$s_{\mathrm{sem}}=1$}
+\STATE Obtain $S_2$ and $\Omega$ by Algorithm~\ref{alg:m2}$(S_1,X^{(t)},A^{(t)},\{y_i^{(t)}\})$;
+\ELSE
+\STATE $S_2 \leftarrow S_1$; $\Omega \leftarrow \mathbf{0}$;
+\ENDIF
+\algphase{Phase 3: Attention-Guided Risk Propagation}
+\IF{$s_{\mathrm{risk}}=1$}
+\STATE Obtain $\psi$ by Algorithm~\ref{alg:m3}$(\Omega,S_2,A^{(t)},\{y_i^{(\tau)}\})$;
+\ELSE
+\STATE $\psi \leftarrow \mathbf{0}$;
+\ENDIF
+\algphase{Phase 4: Security-Aware Rating Prediction}
+\STATE Build anomaly-aware features $X'$ from group summaries, multi-agent screening evidence, $\Omega$, and $\psi$;
+\STATE $\hat{Y} \leftarrow$ \alghl{AnomalyAwareGAT}$(X',A^{(t)})$;
+\STATE \textbf{return} $\hat{Y}$, $S_2$, $\Omega$, $\psi$.
+\end{algorithmic}
+\end{algbox}
+
+\alghead{Multi-Agent Suspicious Screening}
+\begin{algbox}{Multi-Agent Suspicious Screening\label{alg:m1}}
+\algio{%
+multi-quarter financial features $\{X^{(\tau)}\}_{\tau\in\{t-2,t-1,t\}}$ and adjacencies $\{A^{(\tau)}\}$; feature-group index sets $\{F_g\}_{g=1}^{G_{\mathrm{grp}}}$; ratings $\{y_i^{(\tau)}\}$ (optional)%
+}{%
+candidate set $S_1$; fused score vector $\{s(i)\}_{i=1}^{N}$; agent-wise confidence vectors $\{c_k(i)\}_{k=1}^{3}$%
+}
+\nopagebreak
+\begin{algorithmic}[1]
+\algphase{Agent 1: Structure Guardian}
+\STATE Compute degree-change rate $\Delta_{\mathrm{deg}}(i)$ and neighbor Jaccard similarity $J(i)$;
+\STATE Flag banks by thresholds $\tau_{\mathrm{deg}}$ and $\tau_J$, and obtain confidence $c_1(i)$;
+\algphase{Agent 2: Feature Sentinel}
+\STATE Compare current intra-group correlations $\{\rho_g^{(t)}\}_{g=1}^{G_{\mathrm{grp}}}$ with historical baselines $(\mu_g,\sigma_g)$, and flag large deviations with confidence $c_2(i)$;
+\algphase{Agent 3: Temporal Detective}
+\STATE Detect rating jumps $\Delta_r(i)$ unsupported by financial improvement $\phi(i)$ under thresholds $\tau_r$ and $\tau_\phi$, and obtain confidence $c_3(i)$;
+\algphase{Agent 4: Coordinator}
+\STATE Fuse agent confidences $\{c_k(i)\}_{k=1}^{3}$ into a fused suspiciousness score $s(i)$ via reliability-weighted voting;
+\STATE Retain the top $m_{1\_\mathrm{top\_percent}}$ positively scored nodes as $S_1$;
+\STATE Optionally update agent reliability weights $\{w_k\}_{k=1}^{3}$;
+\STATE \textbf{return} $S_1$, $\{s(i)\}_{i=1}^{N}$, and $\{c_k(i)\}_{k=1}^{3}$.
+\end{algorithmic}
+\end{algbox}
+
+\alghead{LLM-Enhanced Semantic Verification}
+\begin{algbox}{LLM-Enhanced Semantic Verification\label{alg:m2}}
+\algio{%
+candidate set $S_1$; financial feature matrix $X\in\mathbb{R}^{N\times d}$; adjacency matrix $A\in\mathbb{R}^{N\times N}$; ratings $\{y_i\}_{i=1}^{N}$ (optional); embedding node set $\mathcal{S}_{\mathrm{emb}}\subseteq V$ (default: candidates in $S_1$)%
+}{%
+refined anomaly set $S_2$; semantic inconsistency score vector $\Omega\in\mathbb{R}^{N}$%
+}
+\nopagebreak
+\begin{algorithmic}[1]
+\STATE Compute structure embeddings $Z^{\mathrm{str}}\in\mathbb{R}^{N\times d_h}$ with a GCN on $(X,A)$;
+\STATE Serialize banks in $\mathcal{S}_{\mathrm{emb}}$ with Prompt~1 and encode them with qwen3-embedding-8b to obtain semantic embeddings $Z^{\mathrm{sem}}\in\mathbb{R}^{N\times d_s}$;
+\STATE For nodes outside $\mathcal{S}_{\mathrm{emb}}$, reuse $Z^{\mathrm{str}}$ as semantic placeholders;
+\STATE Compute node-/type-/relation-level inconsistency diagnostics on $(Z^{\mathrm{str}},Z^{\mathrm{sem}})$;
+\STATE Fuse the diagnostics into $\Omega$ and retain high-$\Omega$ nodes within $S_1$, with a retention fallback if too few nodes remain;
+\STATE \textbf{return} $S_2$ and $\Omega$ (zeroed outside $S_2$).
+\end{algorithmic}
+\end{algbox}
+
+\alghead{Attention-Guided Risk Propagation}
+\begin{algbox}{Attention-Guided Risk Propagation\label{alg:m3}}
+\algio{%
+semantic inconsistency score vector $\Omega\in\mathbb{R}^{N}$ and refined set $S_2$; adjacency matrix $A\in\mathbb{R}^{N\times N}$; rating histories $\{y_i^{(\tau)}\}$; optional causal diagnostics $(\Gamma_{\mathrm{Gr}},\tilde{\Delta}_{\mathrm{cf}})$%
+}{%
+fused risk score vector $\psi\in\mathbb{R}^{N}$%
+}
+\nopagebreak
+\begin{algorithmic}[1]
+\STATE Initialize risk field $r^{(0)}\in\mathbb{R}^{N}$ from $\Omega$ and $S_2$;
+\FOR{$\ell=1$ \TO $L$}
+\STATE $r^{(\ell)} \leftarrow$ DGARP step on $(r^{(\ell-1)},A)$ with residual coefficient $\gamma$;
+\ENDFOR
+\STATE (Optional) Compute STGCN temporal signals $s^{\mathrm{stgcn}}\in\mathbb{R}^{N}$ and Granger/SCM summaries $(\Gamma_{\mathrm{Gr}},\tilde{\Delta}_{\mathrm{cf}})$;
+\STATE Measure recent historical rating deterioration $\Delta r^{\mathrm{hist}}\in\mathbb{R}^{N}$;
+\STATE Fuse components into $\psi\in\mathbb{R}^{N}$ and normalize to a common scale;
+\STATE \textbf{return} $\psi$.
+\end{algorithmic}
+\end{algbox}
+
+\alghead{Statistical Attack Simulation}
+\begin{algbox}{Statistical Attack Simulation\label{alg:attack}}
+\algio{%
+period $t$; attack rate $\rho\in[0,0.25]$%
+}{%
+attacked features $\tilde{X}^{(t)}$ and edges $\tilde{E}^{(t)}$%
+}
+\begin{algorithmic}[1]
+\algphase{Feature Tampering}
+\STATE Estimate historical rating-conditional attribute means;
+\STATE Sample a $\rho$-fraction of lower-rated banks;
+\STATE Shift rating-3/4 attributes toward rating-1/2 means;
+\algphase{Edge Injection}
+\STATE Sample multi-stratum banks at rate $\rho$;
+\STATE Pair higher-rated banks with lower-rated banks;
+\STATE Append the induced cross-rating edges and store the tables;
+\STATE \textbf{return} $\tilde{X}^{(t)}$, $\tilde{E}^{(t)}$.
+\end{algorithmic}
+\end{algbox}
+
+\section{Semantic Embedding Prompt and State Mapping}
+\nopagebreak
+
+LLM-enhanced semantic verification uses a frozen embedding encoder.
+Prompt~1 wraps each structured financial profile so that credit-risk inconsistency is emphasized in embedding space.
+The same discrete state-label mapping is also reported in the main paper.
+\par\newpage
+
+\begin{promptbox}{Prompt 1: Semantic Embedding Instruction}
+\textbf{Role.} Credit-risk inconsistency detector for interbank profiles.\\
+\textbf{Task.} Encode a group-level financial summary so inconsistent profiles are separable in embedding space.\\
+\textbf{Input.}
+\begin{enumerate}[leftmargin=1.15em,itemsep=0.5pt,topsep=1pt,parsep=0pt,partopsep=0pt]
+\item \textit{Prefix:} [Credit rating anomaly: detect an inconsistent interbank profile.]
+\item \textit{Body:} [Bank $<$id$>$: Asset Scale, Capital Adequacy, Loan-Deposit Ratio, Profitability, Liquidity, and Risk Indicators, each as $<$state$>$ ($<$value$>$).]
+\item \textit{Suffix:} [Anomalous vs.\ normal for rating.]
+\end{enumerate}
+\textbf{Constraint.} Each $<$value$>$ is the group mean and each $<$state$>$ is its discrete label. The text is embedding input only, not a generative decision.
+\end{promptbox}
+
+Discrete state labels are assigned by interval rules on the group-level mean.
+A value is labeled by the unique interval satisfying $\mathrm{lower}\le\mathrm{value}<\mathrm{upper}$; values outside all intervals are marked unknown.
+Table~\ref{tab:state-mapping} lists each feature group, its state labels, and the corresponding intervals.
+
+\noindent\begin{minipage}{\linewidth}
+\begin{center}
+\captionof{table}{Discrete state-label mapping for group-level financial means.}
+\label{tab:state-mapping}
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}>{\RaggedRight\arraybackslash}p{0.36\linewidth} l l@{}}
+\hline
+\textbf{Feature group} & \textbf{State} & \textbf{Interval} \\
+\hline
+Asset / liability scale & high & $[10^{10},+\infty)$ \\
+ & medium & $[10^{9},10^{10})$ \\
+ & low & $[0,10^{9})$ \\[1pt]
+Capital adequacy & sufficient & $[0.12,+\infty)$ \\
+ & adequate & $[0.08,0.12)$ \\
+ & insufficient & $[0,0.08)$ \\[1pt]
+Loan-deposit & high & $[0.8,+\infty)$ \\
+ & moderate & $[0.6,0.8)$ \\
+ & low & $[0,0.6)$ \\[1pt]
+Profitability & excellent & $[0.15,+\infty)$ \\
+ & good & $[0.08,0.15)$ \\
+ & poor & $[0,0.08)$ \\[1pt]
+Liquidity & high & $[0.3,+\infty)$ \\
+ & moderate & $[0.2,0.3)$ \\
+ & low & $[0,0.2)$ \\[1pt]
+Risk indicators & low & $[0,0.02)$ \\
+ & moderate & $[0.02,0.05)$ \\
+ & high & $[0.05,+\infty)$ \\
+\hline
+\end{tabular}
+\end{center}
+\end{minipage}
+
+\end{document}
